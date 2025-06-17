@@ -1,0 +1,16 @@
+{# ventas/templates/ventas/cajero/venta_exito.html #}
+{% extends "base.html" %}
+{% block title %}Venta Registrada{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="alert alert-success text-center">
+    ¡Venta #{{ venta.id }} registrada correctamente!
+  </div>
+  <div class="text-center mt-3">
+    <a href="{% url 'dashboard_cajero' %}" class="btn btn-primary">
+      Volver al Dashboard
+    </a>
+  </div>
+</div>
+{% endblock %}

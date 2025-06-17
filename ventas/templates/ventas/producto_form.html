@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}{% if form.instance.pk %}Editar Producto{% else %}Nuevo Producto{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 70vh;">
+  <div class="card shadow" style="width: 100%; max-width: 450px;">
+    <div class="card-body">
+      <h2 class="card-title text-center mb-4 text-warning">
+        {% if form.instance.pk %}Editar Producto{% else %}Nuevo Producto{% endif %}
+      </h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              {{ field.label_tag }}
+              {% if field.name == "precio" or field.name == "stock" %}
+                {{ field|add_class:"form-control"|attr:"type:number"|attr:"min:1"|attr:"step:1"|attr:"pattern:[0-9]*" }}
+              {% else %}
+                {{ field|add_class:"form-control" }}
+              {% endif %}
+              {% if field.errors %}
+                <div class="text-danger small">{{ field.errors|striptags }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        <div class="d-flex justify-content-between mt-4">
+          <button type="submit" class="btn btn-success">Guardar</button>
+          <!-- Botón cancelar que abre el modal -->
+          <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#cancelModal">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="cancelModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">¿Cancelar cambios?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        ¿Estás seguro que quieres cancelar? Se perderán los cambios.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Volver</button>
+        <a href="{% url 'productos_list' %}" class="btn btn-danger">Sí, cancelar</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Modal: advertencia de stock en 0 -->
+<div class="modal fade" id="stockZeroModal" tabindex="-1" aria-labelledby="stockZeroModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger" id="stockZeroModalLabel">
+          Sin stock <i class="bi bi-exclamation-triangle-fill ms-2"></i>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        El stock está en 0.<br>
+        ¿Deseas eliminar este producto?<br>
+        <span class="text-muted">(Si no quieres eliminarlo, por favor ingresa un stock mayor a 0.)</span>
+      </div>
+      <div class="modal-footer">
+        {% if form.instance.pk %}
+          <a href="{% url 'producto_delete' form.instance.pk %}" class="btn btn-danger">Sí, eliminar</a>
+        {% else %}
+          <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Eliminar después</button>
+        {% endif %}
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, volver</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.querySelector('form');
+  const stockInput = document.querySelector('input[name="stock"]');
+  const stockZeroModal = new bootstrap.Modal(document.getElementById('stockZeroModal'));
+
+  if (form && stockInput) {
+    form.addEventListener('submit', function(e) {
+      // Solo valida en edición, o si quieres en ambos casos borra el IF
+      if (parseInt(stockInput.value, 10) === 0) {
+        e.preventDefault();
+        stockZeroModal.show();
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

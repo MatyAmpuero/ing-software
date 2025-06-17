@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Panel de Bodega{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="card shadow">
+    <div class="card-body">
+      <h2 class="card-title text-center">Bienvenido a la Bodega</h2>
+      <p class="text-center">Puedes crear y editar productos, pero no eliminarlos.</p>
+
+      <div class="d-flex justify-content-center mt-4 gap-3">
+        <a href="{% url 'producto_create' %}" class="btn btn-success">Agregar Producto</a>
+        <a href="{% url 'productos_list' %}" class="btn btn-primary">Ver Productos</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

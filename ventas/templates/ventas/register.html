@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Registro{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card shadow">
+      <div class="card-body p-4">
+        <h3 class="card-title text-center mb-4">Crear Cuenta</h3>
+
+        <!-- {# 1. Mensajes tipo Django (success, error, etc.) #}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+            </div>
+          {% endfor %}
+        {% endif %} -->
+
+        {# 2. Errores generales del formulario (no asociados a un campo específico) #}
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ form.non_field_errors|striptags }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              {{ field.label_tag }}
+              {{ field|add_class:"form-control" }}
+              {% if field.errors %}
+                <div class="text-danger small">
+                  {{ field.errors|striptags }}
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-warning w-100">Registrarse</button>
+        </form>
+      </div>
+      <div class="card-footer text-center bg-dark text-white">
+        ¿Ya tienes cuenta?
+        <a class="text-warning" href="{% url 'login' %}">Inicia sesión</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

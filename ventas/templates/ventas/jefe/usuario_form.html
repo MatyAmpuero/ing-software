@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}
+  {% if form.instance.pk %}Editar Usuario{% else %}Nuevo Usuario{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="card shadow">
+    <div class="card-header bg-warning text-white">
+      <h2 class="mb-0">
+        {% if form.instance.pk %}Editar Usuario{% else %}Nuevo Usuario{% endif %}
+      </h2>
+    </div>
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        {# Username #}
+        <div class="mb-3">
+          {{ form.username.label_tag }}
+          {{ form.username|add_class:"form-control" }}
+          {% for err in form.username.errors %}
+            <div class="text-danger">{{ err }}</div>
+          {% endfor %}
+        </div>
+
+        {# First name & Last name #}
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            {{ form.first_name.label_tag }}
+            {{ form.first_name|add_class:"form-control" }}
+            {% for err in form.first_name.errors %}
+              <div class="text-danger">{{ err }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-md-6 mb-3">
+            {{ form.last_name.label_tag }}
+            {{ form.last_name|add_class:"form-control" }}
+            {% for err in form.last_name.errors %}
+              <div class="text-danger">{{ err }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Email #}
+        <div class="mb-3">
+          {{ form.email.label_tag }}
+          {{ form.email }}
+          {% for err in form.email.errors %}
+            <div class="text-danger">{{ err }}</div>
+          {% endfor %}
+        </div>
+
+        {# Groups (select multiple) #}
+        <div class="mb-3">
+          {{ form.groups.label_tag }}
+          {{ form.groups|add_class:"form-select" }}
+          {% for err in form.groups.errors %}
+            <div class="text-danger">{{ err }}</div>
+          {% endfor %}
+        </div>
+
+        {# Active checkbox #}
+        <div class="form-check mb-4">
+            {{ form.is_active|add_class:"form-check-input" }}
+            {{ form.is_active|add_label_class:"form-check-label" }}
+        </div>
+
+        {# Enlace para restablecer la contraseña #}
+        {% if form.instance.pk %}
+            <div class="mb-4">
+                <a href="{% url 'admin:auth_user_password_change' form.instance.pk %}"
+                class="text-decoration-none">
+                🔒 Cambiar contraseña
+                </a>
+            </div>
+        {% endif %}
+
+        {# Botones #}
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-warning">
+            {% if form.instance.pk %}Guardar cambios{% else %}Crear Usuario{% endif %}
+          </button>
+          <a href="{% url 'usuario_list' %}" class="btn btn-secondary">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
