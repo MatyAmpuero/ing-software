@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
-from django.db.models import Sum, Count
+from django.db.models import Sum, F, FloatField, ExpressionWrapper
+from django.db import transaction
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView
 from django.views.decorators.cache import never_cache
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
@@ -18,7 +19,6 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.urls import reverse
 from ventas.models import Producto, Venta, DetalleVenta
-from .models import Producto, Venta
 from .forms import ProductoForm, CustomRegisterForm, JefeUserChangeForm, JefeUserCreationForm
 
 # Pantalla de bienvenida
@@ -332,6 +332,59 @@ def ventas_pos(request):
 @never_cache
 @login_required(login_url='login')
 @user_passes_test(lambda u: u.groups.filter(name='Jefe').exists(), login_url='login')
+def reportes_ventas(request):
+    # Total de ventas y facturación
+    total_ventas = Venta.objects.count()
+    ingresos = Venta.objects.aggregate(total=Sum('total'))['total'] or 0
+
+    # Ticket promedio
+    ticket_promedio = (ingresos / total_ventas) if total_ventas else 0
+
+    # Top 5 productos por unidades vendidas y sus ingresos
+    top_products = (
+        DetalleVenta.objects
+        .values('producto__nombre')
+        .annotate(
+            unidades_vendidas=Sum('cantidad'),
+            ingresos=Sum(
+                ExpressionWrapper(F('cantidad') * F('precio'),
+                                  output_field=FloatField())
+            )
+        )
+        .order_by('-unidades_vendidas')[:5]
+    )
+
+    return render(request, 'ventas/jefe/reportes_ventas.html', {
+        'total_ventas': total_ventas,
+        'ingresos': ingresos,
+        'ticket_promedio': ticket_promedio,
+        'top_products': top_products,
+    })
+
+
+# Helper para chequear que el usuario es Jefe
+def is_jefe(user):
+    return user.groups.filter(name='Jefe').exists()
+
+@login_required(login_url='login')
+@user_passes_test(is_jefe, login_url='no_autorizado')
+def reset_ventas(request):
+    """
+    Vista para que el Jefe borre todas las ventas y sus detalles.
+    GET: muestra confirmación.
+    POST: elimina Venta y DetalleVenta dentro de una transacción.
+    """
+    if request.method == 'POST':
+        with transaction.atomic():
+            DetalleVenta.objects.all().delete()
+            Venta.objects.all().delete()
+        messages.success(request, '✅ Todas las ventas han sido reseteadas.')
+        return redirect('dashboard_jefe')
+    return render(request, 'ventas/confirm_reset_ventas.html')
+
+@never_cache
+@login_required(login_url='login')
+@user_passes_test(lambda u: u.groups.filter(name='Jefe').exists(), login_url='login')
 def usuario_list(request):
     usuarios = User.objects.all()
     return render(request, 'ventas/jefe/usuario_list.html', {'usuarios': usuarios})
@@ -405,6 +458,12 @@ class UsuarioDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView)
 class VentaList(LoginRequiredMixin, ListView):
     model = Venta
     template_name = 'ventas/venta_list.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['es_bodeguero'] = self.request.user.groups.filter(name='Bodeguero').exists()
+        context['es_jefe'] = self.request.user.groups.filter(name='Jefe').exists()
+        return context
 
 class VentaCreate(LoginRequiredMixin, CreateView):
     model = Venta

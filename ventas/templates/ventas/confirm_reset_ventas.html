@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="container mt-5">
+  <h2 class="text-danger">⚠️ Confirmar reseteo de todas las ventas</h2>
+  <p>Esto <strong>eliminará permanentemente</strong> todas las ventas y sus detalles. ¿Deseas continuar?</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Sí, resetear ventas</button>
+    <a href="{% url 'jefe_dashboard' %}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

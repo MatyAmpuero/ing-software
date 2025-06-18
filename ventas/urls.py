@@ -7,7 +7,7 @@ from .views import (
     HomeView, custom_login,
     dashboard_bodeguero, dashboard_cajero, dashboard_jefe,
     ProductoList, ProductoCreate, ProductoUpdate, ProductoDelete,
-    VentaList, VentaCreate,
+    VentaList, VentaCreate, reportes_ventas, reset_ventas,
     usuario_list, UsuarioCreateView, UsuarioUpdateView, UsuarioDeleteView,
     activate_account,
     go_to_register,
@@ -44,6 +44,8 @@ urlpatterns = [
     #CRUD VENTAS
     path('ventas/', VentaList.as_view(), name='ventas_list'),
     path('ventas/nueva/', VentaCreate.as_view(), name='venta_create'),
+    path("jefe/reportes/", reportes_ventas, name="reportes_ventas"),
+    path("jefe/reset_ventas/",  reset_ventas,    name="reset_ventas"),
 
     # Registro de usuarios
     path("register/", register, name="register"),
@@ -53,10 +55,3 @@ urlpatterns = [
     #Activar cuenta
     path('activate/<uidb64>/<token>/', activate_account, name='activate_account'),
 ]
-
-@login_required
-def desactivar_producto(request, pk):
-    producto = get_object_or_404(Producto, pk=pk)
-    producto.activo = False
-    producto.save()
-    return redirect('producto_list')
