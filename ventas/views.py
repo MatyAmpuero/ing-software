@@ -1,25 +1,29 @@
+import datetime, calendar, openpyxl, json
+from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
+from django.db.models.functions import TruncDay
 from django.db.models import Sum, F, FloatField, ExpressionWrapper
 from django.db import transaction
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView
 from django.views.decorators.cache import never_cache
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.contrib.auth.forms import PasswordResetForm, AuthenticationForm, UserCreationForm, UserChangeForm
+from django.contrib.auth.forms import PasswordResetForm, AuthenticationForm
 from django.contrib.auth.views import PasswordResetView
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import login
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
+from django.utils import timezone
 from django.urls import reverse
-from ventas.models import Producto, Venta, DetalleVenta
-from .forms import ProductoForm, CustomRegisterForm, JefeUserChangeForm, JefeUserCreationForm
+from ventas.models import Producto, Venta, DetalleVenta, Proveedor, CompradorFiel
+from .forms import ProductoForm, CustomRegisterForm, JefeUserChangeForm, JefeUserCreationForm, EntradaForm, EntradaDetalleFormSet, ProveedorForm, CompradorFielForm
 
 # Pantalla de bienvenida
 class HomeView(TemplateView):
@@ -48,6 +52,11 @@ def custom_login(request):
     return render(request, "ventas/login.html", {"form": form})
 
 
+def es_jefe(user):
+    return user.groups.filter(name='Jefe').exists()
+
+def es_cajero(user):
+    return user.groups.filter(name='Cajero').exists()
 
 @never_cache
 @login_required(login_url='login')
@@ -59,47 +68,131 @@ def dashboard_bodeguero(request):
 @login_required(login_url='login')
 @user_passes_test(lambda u: u.groups.filter(name='Jefe').exists(), login_url='login')
 def dashboard_jefe(request):
-    """
-    Panel de control para el Jefe:
-    - KPIs: total de productos, activos, inactivos.
-    - Ventas: total de ventas, ingresos totales.
-    - Usuarios registrados.
-    - Últimas 5 ventas.
-    """
-    # Total productos
-    total_prod = Producto.objects.count()
-    activos    = Producto.objects.filter(activo=True).count()
-    inactivos  = total_prod - activos
+    # ——— Fechas de interés ———
+    hoy = timezone.now().date()
+    inicio_actual = hoy.replace(day=1)
 
-    # Ventas y facturación
-    total_ventas  = Venta.objects.count()
-    ingresos      = Venta.objects.aggregate(total=Sum('total'))['total'] or 0
+    #Umbral de stock bajo
+    stock_threshold = 10
 
-    # Usuarios
+    #Query a productos activos con stock ≤ umbral
+    low_stock = Producto.objects.filter(activo=True, stock__lte=stock_threshold).order_by('stock')
+
+    # ——— KPI básicos ———
+    total_prod     = Producto.objects.count()
+    activos        = Producto.objects.filter(activo=True).count()
+    inactivos      = total_prod - activos
+    total_ventas   = Venta.objects.count()
+    ingresos_tot   = Venta.objects.aggregate(total=Sum('total'))['total'] or 0
     total_usuarios = User.objects.count()
 
-    # Últimas 5 ventas
-    ultimas_ventas = Venta.objects.order_by('-fecha')[:5]
+    # ——— KPI comparativo vs mes anterior ———
+    # Calculamos rango mes anterior
+    last_day_prev = inicio_actual - datetime.timedelta(days=1)
+    inicio_prev  = last_day_prev.replace(day=1)
+
+    # Query ventas en ambos periodos
+    ventas_actual  = Venta.objects.filter(fecha__date__gte=inicio_actual, fecha__date__lte=hoy)
+    ventas_prev     = Venta.objects.filter(fecha__date__gte=inicio_prev,  fecha__date__lte=last_day_prev)
+
+    # Conteos
+    cnt_actual    = ventas_actual.count()
+    cnt_prev      = ventas_prev.count()
+    ventas_change = (cnt_actual - cnt_prev) / cnt_prev * 100 if cnt_prev else None
+
+    # Ingresos
+    ing_actual       = ventas_actual.aggregate(t=Sum('total'))['t'] or 0
+    ing_prev         = ventas_prev.aggregate(t=Sum('total'))['t'] or 0
+    ingresos_change  = (ing_actual - ing_prev) / ing_prev * 100 if ing_prev else None
+
+
+    # ——— Evolución de ingresos del mes actual ———
+    ventas_mes = Venta.objects.filter(
+        fecha__date__gte=inicio_actual,
+        fecha__date__lte=hoy
+    )
+    qs_ingresos = (
+        ventas_mes
+        .annotate(dia=TruncDay('fecha'))
+        .values('dia')
+        .annotate(total=Sum('total'))
+        .order_by('dia')
+    )
+    labels = [x['dia'].strftime('%d/%m') for x in qs_ingresos]
+    data   = [float(x['total']) for x in qs_ingresos]
+
+    # ——— Top 5 productos más vendidos ———
+    top5_products = (
+        DetalleVenta.objects
+        .filter(
+            venta__fecha__date__gte=inicio_actual,
+            venta__fecha__date__lte=hoy
+        )
+        .values('producto__nombre')
+        .annotate(unidades=Sum('cantidad'))
+        .order_by('-unidades')[:5]
+    )
 
     context = {
-        'total_prod': total_prod,
-        'activos': activos,
-        'inactivos': inactivos,
-        'total_ventas': total_ventas,
-        'ingresos': ingresos,
+        #STOCK
+        'low_stock': low_stock,
+        'stock_threshold': stock_threshold,
+
+        # KPI
+        'total_prod':     total_prod,
+        'activos':        activos,
+        'inactivos':      inactivos,
+        'total_ventas':   total_ventas,
+        'ingresos':       ingresos_tot,
         'total_usuarios': total_usuarios,
-        'ultimas_ventas': ultimas_ventas,
+        'cnt_actual':     cnt_actual,
+        'cnt_prev':       cnt_prev,
+        'ventas_change':  round(ventas_change, 1) if ventas_change is not None else None,
+        'ing_actual':     ing_actual,
+        'ing_prev':       ing_prev,
+        'ingresos_change': round(ingresos_change, 1) if ingresos_change is not None else None,
+
+        # Chart.js
+        'income_labels': json.dumps(labels),
+        'income_data':   json.dumps(data),
+
+        # Top5
+        'top5_products': top5_products,
     }
     return render(request, 'ventas/jefe/dashboard.html', context)
 
-# ventas/views.py
+@login_required(login_url='login')
+@user_passes_test(lambda u: u.groups.filter(name='Bodeguero').exists(), login_url='no_autorizado')
+def entrada_stock(request):
+    """
+    Permite al bodeguero seleccionar un proveedor y
+    registrar las cantidades de varios productos en una entrada.
+    """
+    if request.method == 'POST':
+        form = EntradaForm(request.POST)
+        formset = EntradaDetalleFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            entrada = form.save(commit=False)
+            entrada.creado_por = request.user
+            entrada.save()
+            # guardamos cada detalle y actualizamos stock
+            for detalle in formset.save(commit=False):
+                detalle.entrada = entrada
+                detalle.save()
+                # actualizar stock del producto
+                prod = detalle.producto
+                prod.stock += detalle.cantidad
+                prod.save()
+            messages.success(request, '✔️ Stock actualizado correctamente.')
+            return redirect('dashboard_bodeguero')
+    else:
+        form = EntradaForm()
+        formset = EntradaDetalleFormSet()
+    return render(request, 'ventas/bodega/entrada_stock.html', {
+        'form': form,
+        'formset': formset,
+    })
 
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.views.decorators.cache import never_cache
-from django.contrib import messages
-
-from ventas.models import Producto, Venta, DetalleVenta
 
 @never_cache
 @login_required(login_url='login')
@@ -333,14 +426,21 @@ def ventas_pos(request):
 @login_required(login_url='login')
 @user_passes_test(lambda u: u.groups.filter(name='Jefe').exists(), login_url='login')
 def reportes_ventas(request):
-    # Total de ventas y facturación
-    total_ventas = Venta.objects.count()
-    ingresos = Venta.objects.aggregate(total=Sum('total'))['total'] or 0
+    """
+    Panel de reportes para el Jefe:
+    - KPIs generales
+    - Top 5 productos
+    - Provee 'today' para el selector de mes en el template
+    """
+    # Fecha actual para el input[type=month]
+    today = timezone.now()
 
-    # Ticket promedio
+    # 1) KPIs generales
+    total_ventas    = Venta.objects.count()
+    ingresos        = Venta.objects.aggregate(total=Sum('total'))['total'] or 0
     ticket_promedio = (ingresos / total_ventas) if total_ventas else 0
 
-    # Top 5 productos por unidades vendidas y sus ingresos
+    # 2) Top 5 productos por unidades vendidas e ingresos
     top_products = (
         DetalleVenta.objects
         .values('producto__nombre')
@@ -354,17 +454,74 @@ def reportes_ventas(request):
         .order_by('-unidades_vendidas')[:5]
     )
 
-    return render(request, 'ventas/jefe/reportes_ventas.html', {
-        'total_ventas': total_ventas,
-        'ingresos': ingresos,
+    context = {
+        'total_ventas':    total_ventas,
+        'ingresos':        ingresos,
         'ticket_promedio': ticket_promedio,
-        'top_products': top_products,
-    })
+        'top_products':    top_products,
+        'today':           today,   # para <input type="month">
+    }
+    return render(request, 'ventas/jefe/reportes_ventas.html', context)
 
 
 # Helper para chequear que el usuario es Jefe
 def is_jefe(user):
     return user.groups.filter(name='Jefe').exists()
+
+#REPORTES A EXCEL
+@login_required(login_url='login')
+@user_passes_test(is_jefe, login_url='no_autorizado')
+def export_sales_excel(request):
+    """
+    Genera un Excel con todas las ventas y sus detalles
+    para el mes seleccionado (YYYY-MM).
+    """
+    # 1) Obtener mes seleccionado, default = mes actual
+    month_str = request.GET.get('month', timezone.now().strftime('%Y-%m'))
+    year, month = map(int, month_str.split('-'))
+    first_day = datetime.date(year, month, 1)
+    last_day  = datetime.date(year, month, calendar.monthrange(year, month)[1])
+
+    # 2) Query ventas y detalles en ese rango
+    ventas = Venta.objects.filter(
+        fecha__date__gte=first_day,
+        fecha__date__lte=last_day
+    ).select_related('usuario')
+    detalles = DetalleVenta.objects.filter(venta__in=ventas).select_related('producto')
+
+    # 3) Crear workbook
+    wb = openpyxl.Workbook()
+    ws1 = wb.active
+    ws1.title = f"Ventas {year}-{month:02d}"
+    ws1.append(['ID','Fecha','Usuario','Medio Pago','Total'])
+    for v in ventas:
+        ws1.append([
+            v.id,
+            v.fecha.strftime('%Y-%m-%d %H:%M'),
+            v.usuario.username,
+            v.medio_pago,
+            float(v.total),
+        ])
+
+    ws2 = wb.create_sheet('DetalleVentas')
+    ws2.append(['ID Detalle','Venta ID','Producto','Cantidad','Precio Unitario'])
+    for d in detalles:
+        ws2.append([
+            d.id,
+            d.venta_id,
+            d.producto.nombre,
+            d.cantidad,
+            float(d.precio),
+        ])
+
+    # 4) Devolver como attachment
+    filename = f"ventas_{year}_{month:02d}.xlsx"
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
 
 @login_required(login_url='login')
 @user_passes_test(is_jefe, login_url='no_autorizado')
@@ -388,6 +545,71 @@ def reset_ventas(request):
 def usuario_list(request):
     usuarios = User.objects.all()
     return render(request, 'ventas/jefe/usuario_list.html', {'usuarios': usuarios})
+
+#CRUD provedores
+def is_bodeguero(user):
+    return user.groups.filter(name='Bodeguero').exists()
+
+bodeguero_required = [login_required(login_url='login'),
+    user_passes_test(is_bodeguero, login_url='no_autorizado')]
+
+@method_decorator(never_cache, name='dispatch')
+class ProveedorListView(ListView):
+    model = Proveedor
+    template_name = 'ventas/bodega/proveedor_list.html'
+    context_object_name = 'proveedores'
+
+@method_decorator(never_cache, name='dispatch')
+class ProveedorCreateView(CreateView):
+    model = Proveedor
+    form_class = ProveedorForm
+    template_name = 'ventas/bodega/proveedor_form.html'
+    success_url = reverse_lazy('proveedores_list')
+
+@method_decorator(never_cache, name='dispatch')
+class ProveedorUpdateView(UpdateView):
+    model = Proveedor
+    form_class = ProveedorForm
+    template_name = 'ventas/bodega/proveedor_form.html'
+    success_url = reverse_lazy('proveedores_list')
+
+@method_decorator(never_cache, name='dispatch')
+class ProveedorDeleteView(DeleteView):
+    model = Proveedor
+    template_name = 'ventas/bodega/proveedor_confirm_delete.html'
+    success_url = reverse_lazy('proveedores_list')
+
+#CRUD COMPRADOR FIEL
+def es_jefe_o_cajero(user):
+    return user.groups.filter(name__in=['Jefe', 'Cajero']).exists()
+
+decoradores_cajero_jefe = [login_required, user_passes_test(es_jefe_o_cajero, login_url='no_autorizado')]
+
+@method_decorator(decoradores_cajero_jefe, name='dispatch')
+class CompradorFielListView(ListView):
+    model = CompradorFiel
+    template_name = 'ventas/comprador_fiel/list.html'
+    context_object_name = 'compradores'
+
+@method_decorator(decoradores_cajero_jefe, name='dispatch')
+class CompradorFielCreateView(CreateView):
+    model = CompradorFiel
+    form_class = CompradorFielForm
+    template_name = 'ventas/comprador_fiel/form.html'
+    success_url = reverse_lazy('compradores_fieles_list')
+
+@method_decorator(decoradores_cajero_jefe, name='dispatch')
+class CompradorFielUpdateView(UpdateView):
+    model = CompradorFiel
+    form_class = CompradorFielForm
+    template_name = 'ventas/comprador_fiel/form.html'
+    success_url = reverse_lazy('compradores_fieles_list')
+
+@method_decorator(decoradores_cajero_jefe, name='dispatch')
+class CompradorFielDeleteView(DeleteView):
+    model = CompradorFiel
+    template_name = 'ventas/comprador_fiel/confirm_delete.html'
+    success_url = reverse_lazy('compradores_fieles_list')
 
 # CRUD Productos
 @method_decorator(never_cache, name='dispatch')

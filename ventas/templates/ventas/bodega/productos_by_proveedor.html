@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Productos de {{ proveedor.nombre }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-4">Productos de {{ proveedor.nombre }}</h2>
+  <a href="{% url 'proveedores_list' %}" class="btn btn-secondary mb-3">← Volver a Proveedores</a>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Precio</th>
+        <th>Stock</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for prod in productos %}
+      <tr>
+        <td>{{ prod.nombre }}</td>
+        <td>${{ prod.precio }}</td>
+        <td>{{ prod.stock }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3">No hay productos para este proveedor.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

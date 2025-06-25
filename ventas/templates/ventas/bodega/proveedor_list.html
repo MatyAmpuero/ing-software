@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Proveedores{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-4">Proveedores</h2>
+  <a href="{% url 'proveedor_create' %}" class="btn btn-success mb-3">➕ Nuevo Proveedor</a>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Contacto</th>
+        <th>Teléfono</th>
+        <th>Email</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in proveedores %}
+      <tr>
+        <td>{{ p.nombre }}</td>
+        <td>{{ p.contacto }}</td>
+        <td>{{ p.telefono }}</td>
+        <td>{{ p.email }}</td>
+        <td>
+          <a href="{% url 'proveedor_update' p.pk %}" class="btn btn-sm btn-primary">Editar</a>
+          <a href="{% url 'proveedor_delete' p.pk %}" class="btn btn-sm btn-danger">Borrar</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">No hay proveedores registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

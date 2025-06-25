@@ -12,7 +12,19 @@
   {% endif %}
 
   <h1 class="mb-4 text-warning">Reportes de Ventas</h1>
-
+    <form method="get" action="{% url 'exportar_excel' %}" class="form-inline mb-4">
+      <label for="month">Mes:</label>
+      <input
+        type="month"
+        id="month"
+        name="month"
+        class="form-control mx-2"
+        value="{{ request.GET.month|default:today|date:'Y-m' }}"
+      />
+      <button type="submit" class="btn btn-success">
+        📥 Descargar Excel
+      </button>
+    </form>
   <div class="row g-4 mb-5">
     <div class="col-md-4">
       <div class="card text-center shadow">

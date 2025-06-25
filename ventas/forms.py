@@ -1,5 +1,7 @@
 from django import forms
-from .models import Producto
+from django.core.validators import RegexValidator
+from django.forms import inlineformset_factory
+from .models import Producto, Entrada, EntradaDetalle, Proveedor, CompradorFiel
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, UserChangeForm
 from django.contrib.auth.models import User
 
@@ -61,6 +63,62 @@ class LoginForm(AuthenticationForm):
             'id': 'id_password'
         })
 
+# Form para CRUD de Proveedor
+type_mismatch_ignore = None  # noqa: F841
+class ProveedorForm(forms.ModelForm):
+    # Override: Contacto como texto (nombres), sin validación numérica
+    contacto = forms.CharField(
+        max_length=100,
+        required=True,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        label="Contacto"
+    )
+    # Validación: solo números en teléfono
+    telefono = forms.CharField(
+        max_length=20,
+        required=True,
+        validators=[RegexValidator(r'^\d+$', message='Solo se permiten números en el teléfono.')],
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        label="Teléfono"
+    )
+
+    class Meta:
+        model = Proveedor
+        fields = ['nombre', 'contacto', 'telefono', 'email']
+        widgets = {
+            'nombre':   forms.TextInput(attrs={'class': 'form-control'}),
+            'email':    forms.EmailInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'nombre':   'Nombre',
+            'contacto': 'Contacto',
+            'telefono': 'Teléfono',
+            'email':    'Email',
+        }
+
+# Form y formset para Entrada de stock
+class EntradaForm(forms.ModelForm):
+    class Meta:
+        model = Entrada
+        fields = ['proveedor']
+        widgets = {'proveedor': forms.Select(attrs={'class': 'form-select'})}
+
+class EntradaDetalleForm(forms.ModelForm):
+    class Meta:
+        model = EntradaDetalle
+        fields = ['producto', 'cantidad']
+        widgets = {
+            'producto': forms.Select(attrs={'class': 'form-select'}),
+            'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+        }
+
+EntradaDetalleFormSet = forms.inlineformset_factory(
+    Entrada, EntradaDetalle,
+    form=EntradaDetalleForm,
+    extra=5,
+    can_delete=False
+)
+
 
 class ProductoForm(forms.ModelForm):
     class Meta:
@@ -115,6 +173,16 @@ class JefeUserChangeForm(UserChangeForm):
         model = User
         fields = ('username', 'first_name', 'last_name', 'email', 'groups', 'is_active')
 
+class CompradorFielForm(forms.ModelForm):
+    class Meta:
+        model = CompradorFiel
+        fields = ['nombre', 'telefono', 'email', 'direccion']
+        widgets = {
+            'nombre':    forms.TextInput(attrs={'class': 'form-control'}),
+            'telefono':  forms.TextInput(attrs={'class': 'form-control'}),
+            'email':     forms.EmailInput(attrs={'class': 'form-control'}),
+            'direccion': forms.TextInput(attrs={'class': 'form-control'}),
+        }
 
 class JefeUserCreationForm(UserCreationForm):
     email = forms.EmailField(

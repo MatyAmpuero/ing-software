@@ -48,10 +48,3 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 ]
 
-
-#recuperar contraseña o crear cuenta
-#30 de mayo caso de uso requerimiento funcionales esta asociado a un requerimiento funcional 
-#mnodelo DE NBASE DE DATOS MER MODI¿ELO RTELACIONAL
-#INICIO DE SESION Y 
-#CRUD CLIENTES PROVEDEROS USUARIO CREAR MODIFICAR Y MODIFICAR NUEVO USARIO VENTAS
-#DOS PRESENTACIONES EL 30 DE MAYO

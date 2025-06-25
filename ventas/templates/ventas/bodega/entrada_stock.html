@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load widget_tweaks %}
+{% block title %}Entrada de Stock{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-4">Registrar llegada de stock</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+      {{ form.proveedor.label_tag }}
+      {{ form.proveedor|add_class:"form-select" }}
+    </div>
+    {{ formset.management_form }}
+    <div class="row">
+      {% for f in formset.forms %}
+        <div class="col-md-4 mb-3">
+          {{ f.producto.label_tag }}
+          {{ f.producto|add_class:"form-select" }}
+        </div>
+        <div class="col-md-2 mb-3">
+          {{ f.cantidad.label_tag }}
+          {{ f.cantidad|add_class:"form-control" }}
+        </div>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-success">Guardar Entrada</button>
+    <a href="{% url 'dashboard_bodeguero' %}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

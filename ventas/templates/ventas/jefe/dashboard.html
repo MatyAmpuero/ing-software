@@ -16,6 +16,7 @@
 <div class="container py-4">
   <h1 class="mb-4 text-warning">Dashboard de Jefe</h1>
 
+  <!-- KPI Cards -->
   <div class="row g-4 mb-5 justify-content-center">
     <!-- Productos -->
     <div class="col-md-3">
@@ -29,7 +30,6 @@
         </div>
       </a>
     </div>
-
     <!-- Ventas -->
     <div class="col-md-3">
       <a href="{% url 'ventas_list' %}" class="dashboard-link">
@@ -42,7 +42,6 @@
         </div>
       </a>
     </div>
-
     <!-- Usuarios -->
     <div class="col-md-3">
       <a href="{% url 'usuario_list' %}" class="dashboard-link">
@@ -55,7 +54,6 @@
         </div>
       </a>
     </div>
-
     <!-- Reportes -->
     <div class="col-md-3">
       <a href="{% url 'reportes_ventas' %}" class="dashboard-link">
@@ -70,39 +68,141 @@
     </div>
   </div>
 
+  <!-- Reset Button -->
   <div class="my-4">
-    <form method="post" action="{% url 'reset_ventas' %}" onsubmit="return confirm('¿Estás seguro de resetear todas las ventas?');">
+    <form method="post" action="{% url 'reset_ventas' %}" onsubmit="return confirm('¿Estás seguro de eliminar todas las ventas?');">
       {% csrf_token %}
       <button type="submit" class="btn btn-outline-danger">
-        <i class="fas fa-eraser"></i> Resetear todas las ventas
+        <i class="fas fa-eraser"></i> Eliminar todas las ventas
       </button>
     </form>
   </div>
 
-  <h3 class="mb-3">Últimas 5 Ventas</h3>
-  {% if ultimas_ventas %}
-    <table class="table table-striped table-dark">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Fecha</th>
-          <th>Usuario</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for v in ultimas_ventas %}
-        <tr>
-          <td>{{ v.id }}</td>
-          <td>{{ v.fecha|date:"d-m-Y H:i" }}</td>
-          <td>{{ v.usuario.username }}</td>
-          <td>${{ v.total }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p>No hay ventas registradas aún.</p>
-  {% endif %}
+  <!-- Evolución de Ingresos -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Ingresos diarios (mes actual)</h5>
+      <canvas id="incomeChart"
+        data-labels='{{ income_labels|safe }}'
+        data-values='{{ income_data|safe }}'
+        height="100">
+      </canvas>
+    </div>
+  </div>
+
+  <!-- Top 5 Productos y Alerta Stock Bajo -->
+  <div class="row g-4 mb-4">
+    <!-- Top 5 -->
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Top 5 productos más vendidos</h5>
+          <ul class="list-group list-group-flush">
+            {% for p in top5_products %}
+              <li class="list-group-item d-flex justify-content-between">
+                {{ p.producto__nombre }}
+                <span class="badge bg-primary rounded-pill">{{ p.unidades }} u.</span>
+              </li>
+            {% empty %}
+              <li class="list-group-item">No hay ventas este mes.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    <!-- Stock Bajo -->
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title text-danger">⚠️ Stock bajo (≤ {{ stock_threshold }} unidades)</h5>
+          <ul class="list-group list-group-flush">
+            {% for prod in low_stock %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ prod.nombre }}
+                <span class="badge bg-warning text-dark rounded-pill">{{ prod.stock }} u.</span>
+              </li>
+            {% empty %}
+              <li class="list-group-item">Todos los productos tienen stock suficiente.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Comparativo vs Mes Anterior -->
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h6 class="card-subtitle mb-2">Ventas (mes actual vs anterior)</h6>
+          <h3>
+            {{ cnt_actual }}
+            {% if ventas_change is not None %}
+              <small class="{% if ventas_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                ({{ ventas_change }}%)
+              </small><br>
+              <small class="text-muted">vs {{ cnt_prev }}</small>
+            {% endif %}
+          </h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h6 class="card-subtitle mb-2">Ingresos (mes actual vs anterior)</h6>
+          <h3>
+            ${{ ing_actual|floatformat:0 }}
+            {% if ingresos_change is not None %}
+              <small class="{% if ingresos_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                ({{ ingresos_change }}%)
+              </small><br>
+              <small class="text-muted">vs ${{ ing_prev|floatformat:0 }}</small>
+            {% endif %}
+          </h3>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+  const canvas = document.getElementById('incomeChart');
+  const ctx = canvas.getContext('2d');
+  const labels = JSON.parse(canvas.getAttribute('data-labels'));
+  const data = JSON.parse(canvas.getAttribute('data-values'));
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Ingresos',
+        data: data,
+        fill: false,
+        borderWidth: 2,
+        tension: 0.2
+      }]
+    },
+    options: {
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(val) {
+              return '$' + val.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            }
+          }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+})();
+</script>
 {% endblock %}
