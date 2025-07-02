@@ -1,5 +1,6 @@
 from django.db import models
-from django.core.validators import RegexValidator
+from django.utils import timezone
+# from django.core.validators import RegexValidator
 
 class Proveedor(models.Model):
     nombre   = models.CharField(max_length=100, unique=True)
@@ -29,7 +30,8 @@ class EntradaDetalle(models.Model):
 class Producto(models.Model):
     nombre    = models.CharField(max_length=100)
     precio    = models.PositiveIntegerField(verbose_name="Precio")
-    stock     = models.PositiveIntegerField(default=0)  # unidades en bodega
+    stock     = models.PositiveIntegerField(default=0)
+    proveedor = models.ForeignKey('Proveedor', on_delete=models.PROTECT, null=True, blank=True, related_name='productos')
     activo    = models.BooleanField(default=True)
 
     def __str__(self):
@@ -38,7 +40,7 @@ class Producto(models.Model):
 class Venta(models.Model):
     total     = models.PositiveIntegerField(default=0)
     usuario   = models.ForeignKey('auth.User', on_delete=models.CASCADE)
-    fecha     = models.DateTimeField(auto_now_add=True)
+    fecha     = models.DateTimeField(default=timezone.now)
     medio_pago = models.CharField(max_length=20, choices=[
         ("Crédito", "Tarjeta Crédito"),
         ("Débito", "Tarjeta Débito"),
@@ -53,6 +55,8 @@ class CompradorFiel(models.Model):
     telefono  = models.CharField(max_length=20)
     email     = models.EmailField(blank=True)
     direccion = models.CharField(max_length=150, blank=True)
+    rut       = models.CharField(max_length=15, unique=True)
+    visitas   = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return self.nombre

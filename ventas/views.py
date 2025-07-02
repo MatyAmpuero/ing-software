@@ -6,8 +6,9 @@ from django.db.models.functions import TruncDay
 from django.db.models import Sum, F, FloatField, ExpressionWrapper
 from django.db import transaction
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView
+from django.views.generic.edit import CreateView
 from django.views.decorators.cache import never_cache
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.forms import PasswordResetForm, AuthenticationForm
 from django.contrib.auth.views import PasswordResetView
 from django.contrib.auth.tokens import default_token_generator
@@ -22,8 +23,10 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.utils import timezone
 from django.urls import reverse
+from django import forms
 from ventas.models import Producto, Venta, DetalleVenta, Proveedor, CompradorFiel
 from .forms import ProductoForm, CustomRegisterForm, JefeUserChangeForm, JefeUserCreationForm, EntradaForm, EntradaDetalleFormSet, ProveedorForm, CompradorFielForm
+
 
 # Pantalla de bienvenida
 class HomeView(TemplateView):
@@ -105,6 +108,8 @@ def dashboard_jefe(request):
     ing_prev         = ventas_prev.aggregate(t=Sum('total'))['t'] or 0
     ingresos_change  = (ing_actual - ing_prev) / ing_prev * 100 if ing_prev else None
 
+    #Conteo compradores fieles
+    total_compradores_fieles = CompradorFiel.objects.count()
 
     # ——— Evolución de ingresos del mes actual ———
     ventas_mes = Venta.objects.filter(
@@ -158,6 +163,9 @@ def dashboard_jefe(request):
 
         # Top5
         'top5_products': top5_products,
+
+        #Compradores fieles
+        "total_compradores_fieles": total_compradores_fieles,
     }
     return render(request, 'ventas/jefe/dashboard.html', context)
 
@@ -205,7 +213,7 @@ def dashboard_cajero(request):
         productos = productos.filter(nombre__icontains=termino)
 
     # 2) Reconstruir carrito desde sesión
-    carrito = request.session.get('carrito', {})       # claves: str(producto_id)
+    carrito = request.session.get('carrito', {})  # claves: str(producto_id)
     carrito_items = []
     total = 0
     for pid_str, cantidad in carrito.items():
@@ -221,11 +229,20 @@ def dashboard_cajero(request):
         })
         total += subtotal
 
-    # 3) Anotar stock disponible en cada producto
-    #    (stock real - ya en carrito)
+    # 3) Anotar stock disponible en cada producto (stock real - ya en carrito)
     for p in productos:
         en_carrito = carrito.get(str(p.id), 0)
         p.stock_disponible = max(p.stock - en_carrito, 0)
+
+    # ---- PASAR DATOS PARA AUTOCOMPLETADO ----
+    productos_data = [
+        {
+            "id": p.id,
+            "nombre": p.nombre,
+            "stock_disponible": p.stock_disponible,
+        }
+        for p in productos
+    ]
 
     # 4) Procesar POST: eliminar, agregar, finalizar
     if request.method == "POST":
@@ -274,7 +291,7 @@ def dashboard_cajero(request):
             if not carrito_items or total == 0:
                 messages.error(request, "El carrito está vacío. Agrega al menos un producto antes de finalizar.")
                 return redirect('dashboard_cajero')
-            
+
             if not medio_pago:
                 messages.error(request, "Selecciona un medio de pago.")
                 return redirect('dashboard_cajero')
@@ -305,6 +322,8 @@ def dashboard_cajero(request):
     return render(request, 'ventas/cajero/dashboard.html', {
         'termino_busqueda': termino,
         'productos': productos,
+        'productos_data': productos_data,   # <-- para el autocompletado en JS
+        'productos_json': json.dumps(productos_data),
         'carrito_items': carrito_items,
         'total': total,
     })
@@ -402,10 +421,32 @@ def ventas_pos(request):
             carrito[prod_id] = carrito.get(prod_id, 0) + cantidad
             request.session['carrito'] = carrito
             return redirect('ventas_pos')
+
         if 'finalizar' in request.POST:
             medio_pago = request.POST['medio_pago']
-            # Aquí guardas la venta en BD y limpias el carrito
-            venta = Venta.objects.create(total=total, usuario=request.user, medio_pago=medio_pago)
+            rut_comprador_fiel = request.POST.get('rut_comprador_fiel', '').strip()
+
+            # Busca comprador fiel si se ingresó RUT
+            comprador_fiel = None
+            if rut_comprador_fiel:
+                try:
+                    comprador_fiel = CompradorFiel.objects.get(rut=rut_comprador_fiel)
+                    comprador_fiel.visitas += 1
+                    comprador_fiel.save()
+                    comprador_fiel = CompradorFiel.objects.get(rut=rut_comprador_fiel)
+                except CompradorFiel.DoesNotExist:
+                    comprador_fiel = None
+
+            # Crear la venta (si tienes el campo comprador_fiel en tu modelo)
+            venta_kwargs = {
+                "total": total,
+                "usuario": request.user,
+                "medio_pago": medio_pago,
+            }
+            if hasattr(Venta, "comprador_fiel"):
+                venta_kwargs["comprador_fiel"] = comprador_fiel
+            venta = Venta.objects.create(**venta_kwargs)
+
             for item in carrito_items:
                 DetalleVenta.objects.create(
                     venta=venta,
@@ -413,6 +454,7 @@ def ventas_pos(request):
                     cantidad=item['cantidad'],
                     precio=item['producto'].precio,
                 )
+
             request.session['carrito'] = {}
             return render(request, 'ventas/venta_exito.html', {'venta': venta})
 
@@ -421,6 +463,7 @@ def ventas_pos(request):
         'carrito_items': carrito_items,
         'total': total,
     })
+
 
 @never_cache
 @login_required(login_url='login')
@@ -554,10 +597,20 @@ bodeguero_required = [login_required(login_url='login'),
     user_passes_test(is_bodeguero, login_url='no_autorizado')]
 
 @method_decorator(never_cache, name='dispatch')
-class ProveedorListView(ListView):
+class ProveedorListView(LoginRequiredMixin, ListView):
     model = Proveedor
     template_name = 'ventas/bodega/proveedor_list.html'
     context_object_name = 'proveedores'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        es_bodeguero = self.request.user.groups.filter(name='Bodeguero').exists()
+        es_jefe = self.request.user.groups.filter(name='Jefe').exists()
+        if es_bodeguero:
+            context['volver_url'] = reverse('dashboard_bodeguero')
+        elif es_jefe:
+            context['volver_url'] = reverse('dashboard_jefe')
+        return context
 
 @method_decorator(never_cache, name='dispatch')
 class ProveedorCreateView(CreateView):
@@ -586,30 +639,50 @@ def es_jefe_o_cajero(user):
 decoradores_cajero_jefe = [login_required, user_passes_test(es_jefe_o_cajero, login_url='no_autorizado')]
 
 @method_decorator(decoradores_cajero_jefe, name='dispatch')
-class CompradorFielListView(ListView):
+class CompradorFielListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = CompradorFiel
     template_name = 'ventas/comprador_fiel/list.html'
-    context_object_name = 'compradores'
+
+    def test_func(self):
+        return self.request.user.groups.filter(name__in=["Cajero", "Jefe"]).exists()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        if user.groups.filter(name="Jefe").exists():
+            context['volver_url'] = reverse('dashboard_jefe')
+        elif user.groups.filter(name="Cajero").exists():
+            context['volver_url'] = reverse('dashboard_cajero')
+        return context
 
 @method_decorator(decoradores_cajero_jefe, name='dispatch')
-class CompradorFielCreateView(CreateView):
+class CompradorFielCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = CompradorFiel
     form_class = CompradorFielForm
     template_name = 'ventas/comprador_fiel/form.html'
     success_url = reverse_lazy('compradores_fieles_list')
 
+    def test_func(self):
+        return self.request.user.groups.filter(name__in=["Cajero", "Jefe"]).exists()
+
 @method_decorator(decoradores_cajero_jefe, name='dispatch')
-class CompradorFielUpdateView(UpdateView):
+class CompradorFielUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = CompradorFiel
     form_class = CompradorFielForm
     template_name = 'ventas/comprador_fiel/form.html'
     success_url = reverse_lazy('compradores_fieles_list')
 
+    def test_func(self):
+        return self.request.user.groups.filter(name__in=["Cajero", "Jefe"]).exists()
+
 @method_decorator(decoradores_cajero_jefe, name='dispatch')
-class CompradorFielDeleteView(DeleteView):
+class CompradorFielDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = CompradorFiel
     template_name = 'ventas/comprador_fiel/confirm_delete.html'
     success_url = reverse_lazy('compradores_fieles_list')
+
+    def test_func(self):
+        return self.request.user.groups.filter(name__in=["Cajero", "Jefe"]).exists()
 
 # CRUD Productos
 @method_decorator(never_cache, name='dispatch')
@@ -625,6 +698,11 @@ class ProductoList(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['es_bodeguero'] = self.request.user.groups.filter(name='Bodeguero').exists()
         context['es_jefe'] = self.request.user.groups.filter(name='Jefe').exists()
+        # Aquí agregas la url de volver:
+        if context['es_bodeguero']:
+            context['volver_url'] = reverse('dashboard_bodeguero')
+        elif context['es_jefe']:
+            context['volver_url'] = reverse('dashboard_jefe')
         return context
 
 class ProductoCreate(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
@@ -646,7 +724,6 @@ class ProductoDelete(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     template_name = 'ventas/producto_confirm_delete.html'
     success_url = reverse_lazy('productos_list')
     permission_required = 'ventas.delete_producto'
-
 
 @login_required
 def desactivar_producto(request, pk):
@@ -687,11 +764,33 @@ class VentaList(LoginRequiredMixin, ListView):
         context['es_jefe'] = self.request.user.groups.filter(name='Jefe').exists()
         return context
 
+
+
 class VentaCreate(LoginRequiredMixin, CreateView):
     model = Venta
-    fields = ['producto', 'cantidad']
+    fields = ['total', 'medio_pago', 'fecha']
     template_name = 'ventas/venta_form.html'
     success_url = reverse_lazy('ventas_list')
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # Si es jefe, campo fecha editable
+        if self.request.user.groups.filter(name='Jefe').exists():
+            form.fields['fecha'].required = True
+            form.fields['fecha'].widget.input_type = 'datetime-local'
+            form.fields['fecha'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
+        else:
+            # Para cajero, ocultar fecha
+            form.fields['fecha'].widget = forms.HiddenInput()
+            form.fields['fecha'].initial = timezone.now()
+        return form
+
+    def form_valid(self, form):
+        form.instance.usuario = self.request.user
+        # Si NO es jefe, fuerza la fecha a ahora
+        if not self.request.user.groups.filter(name='Jefe').exists():
+            form.instance.fecha = timezone.now()
+        return super().form_valid(form)
 
 class CustomPasswordResetView(PasswordResetView):
     form_class = PasswordResetForm

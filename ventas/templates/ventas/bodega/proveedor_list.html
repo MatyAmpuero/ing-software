@@ -3,6 +3,9 @@
 {% block content %}
 <div class="container py-4">
   <h2 class="mb-4">Proveedores</h2>
+  {% if volver_url %}
+    <a href="{{ volver_url }}" class="btn btn-secondary mb-3">← Volver</a>
+  {% endif %}
   <a href="{% url 'proveedor_create' %}" class="btn btn-success mb-3">➕ Nuevo Proveedor</a>
   <table class="table table-striped">
     <thead>

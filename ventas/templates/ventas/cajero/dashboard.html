@@ -1,201 +1,192 @@
-{# ventas/templates/ventas/cajero/dashboard.html #}
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Registrar Venta{% endblock %}
+
+{% block title %}Panel de Cajero{% endblock %}
 
 {% block content %}
 <div class="container py-4">
-
-  {# — Mensajes de Django — #}
-  {% if messages %}
-    {% for message in messages %}
-      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-      </div>
-    {% endfor %}
-  {% endif %}
-
-  <h1 class="mb-4 text-warning">Registrar Venta</h1>
-
-  {# — BUSCADOR CON AUTOCOMPLETE — #}
-  <div class="position-relative mb-3">
-    <input type="text"
-           id="input-busqueda"
-           name="busqueda"
-           class="form-control"
-           placeholder="Buscar producto..."
-           autocomplete="off"
-           value="{{ termino_busqueda }}">
-    <ul id="sugerencias"
-        class="list-group position-absolute w-100"
-        style="z-index:1000; max-height:200px; overflow-y:auto; display:none;">
-    </ul>
+    <script type="application/json" id="productos-data">
+      {{ productos_json|safe }}
+    </script>
+  <h1 class="mb-4 text-success">Panel de Cajero</h1>
+  
+  <!-- Acceso a Compradores Fieles -->
+  <div class="mb-3">
+    <a href="{% url 'compradores_fieles_list' %}" class="btn btn-outline-primary">
+      <i class="fas fa-users"></i> Gestionar Compradores Fieles
+    </a>
   </div>
 
-  {# — AGREGAR AL CARRITO — #}
-  <form method="post" class="mb-3">
-    {% csrf_token %}
-    <div class="row g-2">
-      <div class="col-md-6">
-        <select name="producto_id" class="form-select" id="select-producto">
-          {% for p in productos %}
-            <option value="{{ p.id }}" data-stock="{{ p.stock_disponible }}">
-              {{ p.nombre }} – ${{ p.precio }} (Stock: {{ p.stock_disponible }})
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-3">
-        <input type="number"
-               name="cantidad"
-               class="form-control"
-               id="input-cantidad"
-               value="1"
-               min="1"
-               required>
-      </div>
-      <div class="col-md-3">
-        <button type="submit"
-                name="agregar"
-                class="btn btn-success w-100">
-          Agregar al carrito
-        </button>
-      </div>
-    </div>
-  </form>
-
-  {# — CARRITO DE COMPRAS — #}
+  <!-- Buscador y selección de producto -->
   <div class="card mb-4">
-    <div class="card-header">Carrito de Compras</div>
+    <div class="card-header">Agregar producto al carrito</div>
     <div class="card-body">
+      <form method="post" class="row g-2 align-items-end">
+        {% csrf_token %}
+        <div class="col-md-4 position-relative">
+          <label for="input-busqueda" class="form-label">Buscar producto</label>
+          <input type="text" id="input-busqueda" class="form-control" placeholder="Escribe nombre...">
+          <ul id="sugerencias" class="list-group position-absolute" style="z-index:10;display:none"></ul>
+        </div>
+        <div class="col-md-4">
+          <label for="select-producto" class="form-label">Seleccionar producto</label>
+          <select id="select-producto" name="producto_id" class="form-select" required>
+            {% for p in productos %}
+              <option value="{{ p.id }}" data-stock="{{ p.stock_disponible }}">{{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="input-cantidad" class="form-label">Cantidad</label>
+          <input type="number" id="input-cantidad" name="cantidad" min="1" value="1" class="form-control">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" name="agregar" class="btn btn-success w-100">
+            <i class="fas fa-cart-plus"></i> Agregar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Carrito de venta -->
+  <div class="card mb-4">
+    <div class="card-header">Carrito de Venta</div>
+    <div class="card-body p-2">
       {% if carrito_items %}
-        <table class="table">
+        <table class="table table-sm align-middle">
           <thead>
             <tr>
               <th>Producto</th>
               <th>Cantidad</th>
               <th>Subtotal</th>
-              <th>Acciones</th>
+              <th>Quitar</th>
             </tr>
           </thead>
           <tbody>
             {% for item in carrito_items %}
-            <tr>
-              <td>{{ item.producto.nombre }}</td>
-              <td>{{ item.cantidad }}</td>
-              <td>${{ item.subtotal }}</td>
-              <td>
-                <form method="post" style="display:inline;">
-                  {% csrf_token %}
-                  <button type="submit"
-                          name="eliminar"
-                          value="{{ item.producto.id }}"
-                          class="btn btn-danger btn-sm">
-                    Quitar
-                  </button>
-                </form>
-              </td>
-            </tr>
+              <tr>
+                <td>{{ item.producto.nombre }}</td>
+                <td>{{ item.cantidad }}</td>
+                <td>${{ item.subtotal }}</td>
+                <td>
+                  <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" name="eliminar" value="{{ item.producto.id }}" class="btn btn-danger btn-sm">&times;</button>
+                  </form>
+                </td>
+              </tr>
             {% endfor %}
           </tbody>
-          <tfoot>
-            <tr>
-              <th colspan="2">Total</th>
-              <th>${{ total }}</th>
-              <th></th>
-            </tr>
-          </tfoot>
         </table>
+        <div class="text-end fw-bold">Total: ${{ total }}</div>
       {% else %}
-        <p class="text-center text-muted">Carrito vacío</p>
+        <div class="text-muted">No hay productos en el carrito.</div>
       {% endif %}
     </div>
   </div>
 
-  {# — MEDIO DE PAGO Y FINALIZAR — #}
-  <form method="post">
-    {% csrf_token %}
-    <div class="row g-2 mb-4">
-      <div class="col-md-4">
-        <select name="medio_pago" class="form-select" required>
-          <option value="">Seleccionar medio de pago</option>
-          <option value="Crédito">Tarjeta Crédito</option>
-          <option value="Débito">Tarjeta Débito</option>
-          <option value="Efectivo">Efectivo</option>
-        </select>
-      </div>
-      <div class="col-md-8">
-        <button type="submit"
-                name="finalizar"
-                class="btn btn-warning w-100">
-          Finalizar Venta
-        </button>
-      </div>
-    </div>
-  </form>
+<div class="mb-3">
+  <label for="input-rut" class="form-label">RUT Comprador Fiel (opcional)</label>
+  <input type="text" class="form-control" id="input-rut" name="rut_comprador_fiel" placeholder="Ej: 12.345.678-9">
+  <div class="form-text">Si el comprador no es frecuente, deja este campo vacío.</div>
 </div>
 
-{# — JAVASCRIPT: datos + autocomplete + límite de stock — #}
-<script>
-// 1) Array de productos para autocomplete
-const productos = JSON.parse(document.getElementById('productos-data').textContent);
+  <!-- Finalizar venta -->
+  <div class="card mb-4">
+    <div class="card-header">Finalizar Venta</div>
+    <div class="card-body">
+      <form method="post" class="row g-3">
+        {% csrf_token %}
+        <div class="col-md-4">
+          <label for="medio_pago" class="form-label">Medio de Pago</label>
+          <select name="medio_pago" id="medio_pago" class="form-select" required>
+            <option value="">Seleccione...</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+        </div>
+        <div class="col-md-8 d-flex align-items-end">
+          <button type="submit" name="finalizar" class="btn btn-primary w-100" {% if not carrito_items %}disabled{% endif %}>
+            Finalizar Venta
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-// 2) Referencias al DOM
-const inputBusqueda   = document.getElementById('input-busqueda');
-const sugerencias     = document.getElementById('sugerencias');
-const selectProducto  = document.getElementById('select-producto');
-const inputCantidad   = document.getElementById('input-cantidad');
+  {% if messages %}
+    <div class="mt-3">
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
 
-// 3) Crear mapa producto_id → stock disponible
-const stockMap = {};
-document.querySelectorAll('#select-producto option').forEach(opt => {
-  stockMap[opt.value] = parseInt(opt.dataset.stock);
-});
+  {# — JAVASCRIPT: datos + autocomplete + límite de stock — #}
+  <script>
+  // 1) Array de productos para autocomplete
+  const productos = JSON.parse(document.getElementById('productos-data').textContent);
 
-// 4) Función para actualizar el máximo del input de cantidad
-function actualizarMax() {
-  const prodId   = selectProducto.value;
-  const maxStock = stockMap[prodId] || 1;
-  inputCantidad.max = maxStock;
-  if (+inputCantidad.value > maxStock) {
-    inputCantidad.value = maxStock;
+  // 2) Referencias al DOM
+  const inputBusqueda   = document.getElementById('input-busqueda');
+  const sugerencias     = document.getElementById('sugerencias');
+  const selectProducto  = document.getElementById('select-producto');
+  const inputCantidad   = document.getElementById('input-cantidad');
+
+  // 3) Crear mapa producto_id → stock disponible
+  const stockMap = {};
+  document.querySelectorAll('#select-producto option').forEach(opt => {
+    stockMap[opt.value] = parseInt(opt.dataset.stock);
+  });
+
+  // 4) Función para actualizar el máximo del input de cantidad
+  function actualizarMax() {
+    const prodId   = selectProducto.value;
+    const maxStock = stockMap[prodId] || 1;
+    inputCantidad.max = maxStock;
+    if (+inputCantidad.value > maxStock) {
+      inputCantidad.value = maxStock;
+    }
   }
-}
 
-// 5) Autocomplete: mostrar, filtrar y seleccionar
-inputBusqueda.addEventListener('focus', () => {
-  if (sugerencias.children.length) sugerencias.style.display = 'block';
-});
-inputBusqueda.addEventListener('blur', () => {
-  setTimeout(() => sugerencias.style.display = 'none', 100);
-});
-inputBusqueda.addEventListener('input', e => {
-  const term = e.target.value.toLowerCase();
-  const matches = productos.filter(p =>
-    p.nombre.toLowerCase().includes(term)
-  );
-  sugerencias.innerHTML = matches.map(p => `
-    <li class="list-group-item list-group-item-action"
-        data-id="${p.id}"
-        data-nombre="${p.nombre}">
-      ${p.nombre}
-    </li>
-  `).join('');
-  sugerencias.style.display = matches.length ? 'block' : 'none';
-  // Al hacer clic en una sugerencia
-  sugerencias.querySelectorAll('li').forEach(li =>
-    li.addEventListener('mousedown', () => {
-      inputBusqueda.value   = li.dataset.nombre;
-      selectProducto.value  = li.dataset.id;
-      actualizarMax();
-      sugerencias.style.display = 'none';
-    })
-  );
-});
+  // 5) Autocomplete: mostrar, filtrar y seleccionar
+  inputBusqueda.addEventListener('focus', () => {
+    if (sugerencias.children.length) sugerencias.style.display = 'block';
+  });
+  inputBusqueda.addEventListener('blur', () => {
+    setTimeout(() => sugerencias.style.display = 'none', 100);
+  });
+  inputBusqueda.addEventListener('input', e => {
+    const term = e.target.value.toLowerCase();
+    const matches = productos.filter(p =>
+      p.nombre.toLowerCase().includes(term)
+    );
+    sugerencias.innerHTML = matches.map(p => `
+      <li class="list-group-item list-group-item-action"
+          data-id="${p.id}"
+          data-nombre="${p.nombre}">
+        ${p.nombre}
+      </li>
+    `).join('');
+    sugerencias.style.display = matches.length ? 'block' : 'none';
+    // Al hacer clic en una sugerencia
+    sugerencias.querySelectorAll('li').forEach(li =>
+      li.addEventListener('mousedown', () => {
+        inputBusqueda.value   = li.dataset.nombre;
+        selectProducto.value  = li.dataset.id;
+        actualizarMax();
+        sugerencias.style.display = 'none';
+      })
+    );
+  });
 
-// 6) Ejecutar al cargar y al cambiar selección
-window.addEventListener('DOMContentLoaded', actualizarMax);
-selectProducto.addEventListener('change', actualizarMax);
-</script>
+  // 6) Ejecutar al cargar y al cambiar selección
+  window.addEventListener('DOMContentLoaded', actualizarMax);
+  selectProducto.addEventListener('change', actualizarMax);
+  </script>
+
+</div>
 {% endblock %}

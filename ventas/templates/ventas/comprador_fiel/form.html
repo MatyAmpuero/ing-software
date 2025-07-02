@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ view.object.pk|yesno:"Editar,Agregar" }} Comprador Fiel{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-3">
+    {% if view.object %}Editar{% else %}Agregar{% endif %} Comprador Fiel
+  </h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="mb-3">
+      <label for="{{ form.nombre.id_for_label }}" class="form-label">Nombre</label>
+      {{ form.nombre }}
+      {% for error in form.nombre.errors %}
+        <div class="text-danger small">{{ error }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3">
+      <label for="{{ form.rut.id_for_label }}" class="form-label">RUT</label>
+      {{ form.rut }}
+      {% for error in form.rut.errors %}
+        <div class="text-danger small">{{ error }}</div>
+      {% endfor %}
+      <div class="form-text">Ejemplo: 12345678-5</div>
+    </div>
+
+    <div class="mb-3">
+      <label for="{{ form.telefono.id_for_label }}" class="form-label">Teléfono</label>
+      {{ form.telefono }}
+      {% for error in form.telefono.errors %}
+        <div class="text-danger small">{{ error }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3">
+      <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+      {{ form.email }}
+      {% for error in form.email.errors %}
+        <div class="text-danger small">{{ error }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3">
+      <label for="{{ form.direccion.id_for_label }}" class="form-label">Dirección</label>
+      {{ form.direccion }}
+      {% for error in form.direccion.errors %}
+        <div class="text-danger small">{{ error }}</div>
+      {% endfor %}
+    </div>
+
+    <button type="submit" class="btn btn-primary">Guardar</button>
+    <a href="{% url 'compradores_fieles_list' %}" class="btn btn-secondary">Volver</a>
+  </form>
+</div>
+{% endblock %}

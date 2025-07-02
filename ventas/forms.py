@@ -1,9 +1,37 @@
+import re
 from django import forms
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
-from django.forms import inlineformset_factory
+# from django.forms import inlineformset_factory
 from .models import Producto, Entrada, EntradaDetalle, Proveedor, CompradorFiel
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, UserChangeForm
 from django.contrib.auth.models import User
+
+def validar_rut(rut):
+    """Valida que el RUT tenga formato válido y DV correcto (Chile)."""
+    rut = rut.upper().replace("-", "").replace(".", "")
+    if not re.match(r'^\d{7,8}[0-9K]$', rut):
+        raise ValidationError("Ingrese un RUT válido. Ej: 12345678-5")
+    cuerpo = rut[:-1]
+    dv = rut[-1]
+
+    suma = 0
+    multiplo = 2
+    for c in reversed(cuerpo):
+        suma += int(c) * multiplo
+        multiplo += 1
+        if multiplo > 7:
+            multiplo = 2
+    dv_esperado = 11 - (suma % 11)
+    if dv_esperado == 11:
+        dv_esperado = "0"
+    elif dv_esperado == 10:
+        dv_esperado = "K"
+    else:
+        dv_esperado = str(dv_esperado)
+    if dv != dv_esperado:
+        raise ValidationError("El RUT ingresado no es válido (DV incorrecto).")
+
 
 class CustomRegisterForm(UserCreationForm):
     email = forms.EmailField(
@@ -123,7 +151,7 @@ EntradaDetalleFormSet = forms.inlineformset_factory(
 class ProductoForm(forms.ModelForm):
     class Meta:
         model = Producto
-        fields = ['nombre', 'precio', 'stock']
+        fields = ['nombre', 'precio', 'stock', 'proveedor']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -174,14 +202,29 @@ class JefeUserChangeForm(UserChangeForm):
         fields = ('username', 'first_name', 'last_name', 'email', 'groups', 'is_active')
 
 class CompradorFielForm(forms.ModelForm):
+    telefono = forms.CharField(
+        max_length=20,
+        required=True,
+        validators=[RegexValidator(r'^\d+$', message='Sólo se permiten números en el teléfono.')],
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        label="Teléfono"
+    )
+    rut = forms.CharField(
+        max_length=15,
+        required=True,
+        validators=[validar_rut],
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        label="RUT"
+    )
+
     class Meta:
         model = CompradorFiel
-        fields = ['nombre', 'telefono', 'email', 'direccion']
+        fields = ['nombre', 'telefono', 'email', 'direccion', 'rut']
         widgets = {
-            'nombre':    forms.TextInput(attrs={'class': 'form-control'}),
-            'telefono':  forms.TextInput(attrs={'class': 'form-control'}),
-            'email':     forms.EmailInput(attrs={'class': 'form-control'}),
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'direccion': forms.TextInput(attrs={'class': 'form-control'}),
+            # 'rut': forms.TextInput(attrs={'class': 'form-control'}), # opcional aquí porque ya lo definiste arriba
         }
 
 class JefeUserCreationForm(UserCreationForm):

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Eliminar Comprador Fiel{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h2>¿Estás seguro de eliminar a <strong>{{ object.nombre }}</strong>?</h2>
+  <form method="post">{% csrf_token %}
+    <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+    <a href="{% url 'compradores_fieles_list' %}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

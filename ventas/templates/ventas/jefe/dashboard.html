@@ -16,8 +16,8 @@
 <div class="container py-4">
   <h1 class="mb-4 text-warning">Dashboard de Jefe</h1>
 
-  <!-- KPI Cards -->
-  <div class="row g-4 mb-5 justify-content-center">
+  <!-- Primera fila de KPIs -->
+  <div class="row g-4 mb-4 justify-content-center">
     <!-- Productos -->
     <div class="col-md-3">
       <a href="{% url 'productos_list' %}" class="dashboard-link">
@@ -67,6 +67,23 @@
       </a>
     </div>
   </div>
+
+  <!-- Segunda fila: Compradores Fieles (centrado, solo si hay 1 card) -->
+  <div class="row g-4 justify-content-center">
+    <div class="col-md-3">
+      <a href="{% url 'compradores_fieles_list' %}" class="dashboard-link">
+        <div class="card dashboard-card text-center shadow">
+          <div class="card-body">
+            <h5 class="card-title">Compradores Fieles</h5>
+            <p class="h2">{{ total_compradores_fieles }}</p>
+            <small>Registrados</small>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
+
 
   <!-- Reset Button -->
   <div class="my-4">
