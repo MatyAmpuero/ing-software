@@ -19,6 +19,7 @@
         id="month"
         name="month"
         class="form-control mx-2"
+        max="{{ today|date:'Y-m' }}"
         value="{{ request.GET.month|default:today|date:'Y-m' }}"
       />
       <button type="submit" class="btn btn-success">
@@ -46,7 +47,7 @@
       <div class="card text-center shadow">
         <div class="card-body">
           <h5 class="card-title">Ticket Promedio</h5>
-          <p class="h2">${{ ticket_promedio|floatformat:2 }}</p>
+          <p class="h2">${{ ticket_promedio|floatformat:0 }}</p>
           <small>Ingresos / venta</small>
         </div>
       </div>
@@ -67,7 +68,7 @@
       <tr>
         <td>{{ p.producto__nombre }}</td>
         <td>{{ p.unidades_vendidas }}</td>
-        <td>${{ p.ingresos|floatformat:2 }}</td>
+        <td>${{ p.ingresos|floatformat:0 }}</td>
       </tr>
       {% empty %}
       <tr>

@@ -4,6 +4,11 @@
 {% block content %}
 <div class="container py-4">
   <h2 class="mb-4">Registrar llegada de stock</h2>
+      {% if error_no_producto %}
+        <div class="alert alert-warning">
+          {{ error_no_producto }}
+        </div>
+      {% endif %}
   <form method="post">
     {% csrf_token %}
     <div class="mb-3">
@@ -24,7 +29,7 @@
       {% endfor %}
     </div>
     <button type="submit" class="btn btn-success">Guardar Entrada</button>
-    <a href="{% url 'dashboard_bodeguero' %}" class="btn btn-secondary">Cancelar</a>
+    <a href="{{ volver_url }}" class="btn btn-secondary">Cancelar</a>
   </form>
 </div>
 {% endblock %}

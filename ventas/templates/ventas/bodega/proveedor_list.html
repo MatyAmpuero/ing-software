@@ -6,7 +6,9 @@
   {% if volver_url %}
     <a href="{{ volver_url }}" class="btn btn-secondary mb-3">← Volver</a>
   {% endif %}
-  <a href="{% url 'proveedor_create' %}" class="btn btn-success mb-3">➕ Nuevo Proveedor</a>
+  {% if es_jefe or es_bodeguero %}
+    <a href="{% url 'proveedor_create' %}" class="btn btn-success mb-3">➕ Nuevo Proveedor</a>
+  {% endif %}
   <table class="table table-striped">
     <thead>
       <tr>

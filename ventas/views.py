@@ -167,39 +167,70 @@ def dashboard_jefe(request):
         #Compradores fieles
         "total_compradores_fieles": total_compradores_fieles,
     }
+
+    context['es_jefe'] = request.user.groups.filter(name='Jefe').exists()
+    context['es_bodeguero'] = request.user.groups.filter(name='Bodeguero').exists()
+    context['es_cajero'] = request.user.groups.filter(name='Cajero').exists()
     return render(request, 'ventas/jefe/dashboard.html', context)
 
+def es_jefe_o_bodeguero(user):
+    return user.groups.filter(name__in=['Bodeguero', 'Jefe']).exists()
+
 @login_required(login_url='login')
-@user_passes_test(lambda u: u.groups.filter(name='Bodeguero').exists(), login_url='no_autorizado')
+@user_passes_test(es_jefe_o_bodeguero, login_url='login')
 def entrada_stock(request):
     """
-    Permite al bodeguero seleccionar un proveedor y
-    registrar las cantidades de varios productos en una entrada.
+    Permite al bodeguero o jefe registrar entradas de stock.
     """
+
+    # 1. Define a dónde volver según el grupo
+    if request.user.groups.filter(name='Jefe').exists():
+        volver_url = reverse('dashboard_jefe')
+    else:
+        volver_url = reverse('dashboard_bodeguero')
+
     if request.method == 'POST':
         form = EntradaForm(request.POST)
         formset = EntradaDetalleFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
+            # VALIDACIÓN: al menos un producto con cantidad
+            hay_producto = False
+            for detalle_form in formset:
+                cleaned = detalle_form.cleaned_data
+                if cleaned and not detalle_form.cleaned_data.get('DELETE', False):
+                    producto = cleaned.get('producto')
+                    cantidad = cleaned.get('cantidad')
+                    if producto and cantidad and cantidad > 0:
+                        hay_producto = True
+                        break
+            if not hay_producto:
+                return render(request, 'ventas/bodega/entrada_stock.html', {
+                    'form': form,
+                    'formset': formset,
+                    'volver_url': volver_url,  # <-- aquí
+                    'error_no_producto': "Debes seleccionar al menos un producto y cantidad para registrar la entrada.",
+                })
+            # GUARDADO NORMAL
             entrada = form.save(commit=False)
             entrada.creado_por = request.user
             entrada.save()
-            # guardamos cada detalle y actualizamos stock
             for detalle in formset.save(commit=False):
                 detalle.entrada = entrada
                 detalle.save()
-                # actualizar stock del producto
                 prod = detalle.producto
                 prod.stock += detalle.cantidad
                 prod.save()
             messages.success(request, '✔️ Stock actualizado correctamente.')
-            return redirect('dashboard_bodeguero')
+            return redirect(volver_url)  # <-- aquí también
     else:
         form = EntradaForm()
         formset = EntradaDetalleFormSet()
     return render(request, 'ventas/bodega/entrada_stock.html', {
         'form': form,
         'formset': formset,
+        'volver_url': volver_url,  # <-- SIEMPRE agrega esto en cada render
     })
+
 
 
 @never_cache
@@ -590,11 +621,13 @@ def usuario_list(request):
     return render(request, 'ventas/jefe/usuario_list.html', {'usuarios': usuarios})
 
 #CRUD provedores
-def is_bodeguero(user):
-    return user.groups.filter(name='Bodeguero').exists()
+def es_jefe_o_bodeguero(user):
+    return user.groups.filter(name__in=['Jefe', 'Bodeguero']).exists()
 
-bodeguero_required = [login_required(login_url='login'),
-    user_passes_test(is_bodeguero, login_url='no_autorizado')]
+decoradores_jefe_bodeguero = [
+    login_required,
+    user_passes_test(es_jefe_o_bodeguero, login_url='no_autorizado')
+]
 
 @method_decorator(never_cache, name='dispatch')
 class ProveedorListView(LoginRequiredMixin, ListView):
@@ -612,8 +645,8 @@ class ProveedorListView(LoginRequiredMixin, ListView):
             context['volver_url'] = reverse('dashboard_jefe')
         return context
 
-@method_decorator(never_cache, name='dispatch')
-class ProveedorCreateView(CreateView):
+@method_decorator(decoradores_jefe_bodeguero, name='dispatch')
+class ProveedorCreateView(LoginRequiredMixin, CreateView):
     model = Proveedor
     form_class = ProveedorForm
     template_name = 'ventas/bodega/proveedor_form.html'
@@ -648,11 +681,13 @@ class CompradorFielListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
-        if user.groups.filter(name="Jefe").exists():
+        context['es_bodeguero'] = self.request.user.groups.filter(name='Bodeguero').exists()
+        context['es_jefe'] = self.request.user.groups.filter(name='Jefe').exists()
+        # Puedes agregar aquí otras variables que quieras pasar al template
+        if context['es_bodeguero']:
+            context['volver_url'] = reverse('dashboard_bodeguero')
+        elif context['es_jefe']:
             context['volver_url'] = reverse('dashboard_jefe')
-        elif user.groups.filter(name="Cajero").exists():
-            context['volver_url'] = reverse('dashboard_cajero')
         return context
 
 @method_decorator(decoradores_cajero_jefe, name='dispatch')

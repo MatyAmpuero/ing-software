@@ -2,7 +2,6 @@ import re
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
-# from django.forms import inlineformset_factory
 from .models import Producto, Entrada, EntradaDetalle, Proveedor, CompradorFiel
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, UserChangeForm
 from django.contrib.auth.models import User
@@ -169,6 +168,12 @@ class ProductoForm(forms.ModelForm):
         if precio <= 0:
             raise forms.ValidationError("El precio debe ser un número entero positivo mayor a cero.")
         return precio
+    
+    def clean_nombre(self):
+        nombre = self.cleaned_data['nombre']
+        if Producto.objects.filter(nombre=nombre).exists():
+            raise forms.ValidationError("Ya existe un producto con ese nombre.")
+        return nombre
     
 #PODERES DEL JEFE
 class JefeUserChangeForm(UserChangeForm):

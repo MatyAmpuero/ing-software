@@ -28,10 +28,10 @@ class EntradaDetalle(models.Model):
         return f"{self.producto.nombre}: {self.cantidad}"
 
 class Producto(models.Model):
-    nombre    = models.CharField(max_length=100)
+    nombre    = models.CharField(max_length=100, unique=True)
     precio    = models.PositiveIntegerField(verbose_name="Precio")
     stock     = models.PositiveIntegerField(default=0)
-    proveedor = models.ForeignKey('Proveedor', on_delete=models.PROTECT, null=True, blank=True, related_name='productos')
+    proveedor = models.ForeignKey('Proveedor', on_delete=models.PROTECT, related_name='productos')
     activo    = models.BooleanField(default=True)
 
     def __str__(self):
