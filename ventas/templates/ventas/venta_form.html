@@ -1,15 +1,60 @@
-{% load static %}
-<!DOCTYPE html><html><head>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <title>{% if object %}Editar{% else %}Nueva{% endif %} Venta</title>
-</head><body class="p-5">
-  <div class="container">
-    <h1>{% if object %}Editar{% else %}Nueva{% endif %} Venta</h1>
-    <form method="post" class="needs-validation" novalidate>
-      {% csrf_token %}
-      {{ form.as_p }}
+{% extends "base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}{% if venta.pk %}Editar Venta{% else %}Nueva Venta{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 700px;">
+  <h1 class="mb-4">{% if venta.pk %}Editar Venta{% else %}Nueva Venta{% endif %}</h1>
+  <form method="post">
+    {% csrf_token %}
+    <!-- Campos principales de la Venta -->
+    <div class="mb-3">
+      {{ form.total.label_tag }}  
+      {{ form.total|add_class:"form-control" }}
+    </div>
+    <div class="mb-3">
+      {{ form.medio_pago.label_tag }}
+      {{ form.medio_pago|add_class:"form-select" }}
+    </div>
+    <div class="mb-3">
+      {{ form.fecha.label_tag }}
+      {{ form.fecha|add_class:"form-control" }}
+    </div>
+
+    <!-- Productos de la Venta -->
+    <h4 class="mt-4 mb-2">Productos de la Venta</h4>
+    {{ formset.management_form }}
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>Cantidad</th>
+          <th>Precio</th>
+          <th>Eliminar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for form_detalle in formset.forms %}
+        <tr>
+          <td>{{ form_detalle.producto|add_class:"form-select" }}</td>
+          <td>{{ form_detalle.cantidad|add_class:"form-control" }}</td>
+          <td>{{ form_detalle.precio|add_class:"form-control" }}</td>
+          <td>
+            {% if formset.can_delete %}
+              {{ form_detalle.DELETE }}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Botones -->
+    <div class="d-flex gap-3 mt-4">
       <button type="submit" class="btn btn-success">Guardar</button>
       <a href="{% url 'ventas_list' %}" class="btn btn-secondary">Cancelar</a>
-    </form>
-  </div>
-</body></html>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,8 +1,9 @@
 import re
 from django import forms
+from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
-from .models import Producto, Entrada, EntradaDetalle, Proveedor, CompradorFiel
+from .models import Producto, Entrada, EntradaDetalle, Proveedor, CompradorFiel, Venta, DetalleVenta
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, UserChangeForm
 from django.contrib.auth.models import User
 
@@ -133,7 +134,7 @@ class EntradaForm(forms.ModelForm):
 class EntradaDetalleForm(forms.ModelForm):
     class Meta:
         model = EntradaDetalle
-        fields = ['producto', 'cantidad']
+        fields = ['producto', 'cantidad', ]
         widgets = {
             'producto': forms.Select(attrs={'class': 'form-select'}),
             'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
@@ -145,6 +146,29 @@ EntradaDetalleFormSet = forms.inlineformset_factory(
     extra=5,
     can_delete=False
 )
+
+class DetalleVentaForm(forms.ModelForm):
+    class Meta:
+        model = DetalleVenta
+        fields = ['producto', 'cantidad', 'precio']
+        widgets = {
+            'producto': forms.Select(attrs={'class': 'form-select'}),
+            'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+            'precio': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+        }
+
+DetalleVentaFormSet = inlineformset_factory(
+    Venta, DetalleVenta,
+    form=DetalleVentaForm,
+    extra=1,
+    can_delete=True
+)
+
+
+class VentaForm(forms.ModelForm):
+    class Meta:
+        model = Venta
+        fields = ['total', 'medio_pago', 'fecha']
 
 
 class ProductoForm(forms.ModelForm):
@@ -166,13 +190,21 @@ class ProductoForm(forms.ModelForm):
     def clean_precio(self):
         precio = self.cleaned_data['precio']
         if precio <= 0:
-            raise forms.ValidationError("El precio debe ser un número entero positivo mayor a cero.")
+            raise ValidationError("El precio debe ser un número entero positivo mayor a cero.")
+        if precio > 999999:
+            raise ValidationError("El precio no puede ser mayor a $999.999.")
+        if not isinstance(precio, int):
+            raise ValidationError("El precio debe ser un número entero sin decimales.")
         return precio
     
     def clean_nombre(self):
         nombre = self.cleaned_data['nombre']
-        if Producto.objects.filter(nombre=nombre).exists():
-            raise forms.ValidationError("Ya existe un producto con ese nombre.")
+        # Validar solo letras (mayúsculas y minúsculas, con tildes) y espacios
+        if not re.match(r'^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$', nombre):
+            raise ValidationError("El nombre solo puede contener letras y espacios.")
+        # Además, validar que no exista otro producto con el mismo nombre
+        if Producto.objects.filter(nombre=nombre).exclude(pk=self.instance.pk).exists():
+            raise ValidationError("Ya existe un producto con ese nombre.")
         return nombre
     
 #PODERES DEL JEFE

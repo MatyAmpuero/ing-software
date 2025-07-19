@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Editar Venta{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Editar Venta</h1>
+<form method="post">
+  {% csrf_token %}
+  <h4>Productos de la Venta</h4>
+  {{ formset.management_form }}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Cantidad</th>
+        <th>Precio</th>
+        <th>Eliminar</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in formset.forms %}
+        <tr>
+          <td>{{ f.producto }}</td>
+          <td>{{ f.cantidad }}</td>
+          <td>{{ f.precio }}</td>
+          <td>
+            {% if f.instance.pk %}
+              {{ f.DELETE }}
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <button type="submit" class="btn btn-success">Guardar</button>
+  <a href="{% url 'ventas_list' %}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}

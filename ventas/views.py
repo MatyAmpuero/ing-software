@@ -25,7 +25,8 @@ from django.utils import timezone
 from django.urls import reverse
 from django import forms
 from ventas.models import Producto, Venta, DetalleVenta, Proveedor, CompradorFiel
-from .forms import ProductoForm, CustomRegisterForm, JefeUserChangeForm, JefeUserCreationForm, EntradaForm, EntradaDetalleFormSet, ProveedorForm, CompradorFielForm
+from .forms import (ProductoForm, CustomRegisterForm, JefeUserChangeForm, JefeUserCreationForm, EntradaForm, 
+                    EntradaDetalleFormSet, ProveedorForm, CompradorFielForm, VentaForm, DetalleVentaFormSet)
 
 
 # Pantalla de bienvenida
@@ -792,6 +793,7 @@ class UsuarioDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView)
 class VentaList(LoginRequiredMixin, ListView):
     model = Venta
     template_name = 'ventas/venta_list.html'
+    context_object_name = 'ventas'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -799,6 +801,30 @@ class VentaList(LoginRequiredMixin, ListView):
         context['es_jefe'] = self.request.user.groups.filter(name='Jefe').exists()
         return context
 
+class VentaUpdateView(UpdateView):
+    model = Venta
+    fields = ['total', 'medio_pago', 'fecha']  # O los campos que necesites
+    template_name = 'ventas/venta_form.html'   # O el que tú uses
+    success_url = reverse_lazy('ventas_list')
+
+class VentaDeleteView(DeleteView):
+    model = Venta
+    template_name = 'ventas/venta_confirm_delete.html'  # O el que tú uses
+    success_url = reverse_lazy('ventas_list')
+
+def editar_venta(request, pk):
+    venta = get_object_or_404(Venta, pk=pk)
+    if request.method == "POST":
+        formset = DetalleVentaFormSet(request.POST, instance=venta)
+        if formset.is_valid():
+            formset.save()
+            # Si quieres recalcular el total aquí, hazlo:
+            venta.total = sum([f.cleaned_data['cantidad'] * f.cleaned_data['precio'] for f in formset.forms if f.cleaned_data and not f.cleaned_data.get('DELETE', False)])
+            venta.save()
+            return redirect('ventas_list')
+    else:
+        formset = DetalleVentaFormSet(instance=venta)
+    return render(request, 'ventas/editar_venta.html', {'venta': venta, 'formset': formset})
 
 
 class VentaCreate(LoginRequiredMixin, CreateView):
@@ -826,6 +852,35 @@ class VentaCreate(LoginRequiredMixin, CreateView):
         if not self.request.user.groups.filter(name='Jefe').exists():
             form.instance.fecha = timezone.now()
         return super().form_valid(form)
+    
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.shortcuts import render, redirect
+from .forms import VentaForm, DetalleVentaFormSet
+
+@login_required
+@user_passes_test(lambda u: u.groups.filter(name='Jefe').exists())
+def venta_create(request):
+    if request.method == 'POST':
+        form = VentaForm(request.POST)
+        formset = DetalleVentaFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            venta = form.save(commit=False)
+            venta.usuario = request.user
+            # Calcular total sumando detalles
+            total = 0
+            for detalle in formset:
+                if detalle.cleaned_data and not detalle.cleaned_data.get('DELETE', False):
+                    total += detalle.cleaned_data['cantidad'] * detalle.cleaned_data['precio']
+            venta.total = total
+            venta.save()
+            formset.instance = venta
+            formset.save()
+            return redirect('ventas_list')
+    else:
+        form = VentaForm()
+        formset = DetalleVentaFormSet()
+    return render(request, 'ventas/venta_form.html', {'form': form, 'formset': formset, 'venta': None})
+
 
 class CustomPasswordResetView(PasswordResetView):
     form_class = PasswordResetForm

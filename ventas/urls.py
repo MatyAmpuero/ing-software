@@ -1,8 +1,6 @@
+from django import views
 from django.urls import path
-from django.shortcuts import get_object_or_404, redirect
-from ventas.models import Producto
 from django.contrib.auth.views import LogoutView
-from django.contrib.auth.decorators import login_required
 from .views import (
     HomeView, custom_login,
     dashboard_bodeguero, dashboard_cajero, dashboard_jefe,
@@ -11,6 +9,7 @@ from .views import (
     ProductoList, ProductoCreate, ProductoUpdate, ProductoDelete,
     CompradorFielListView, CompradorFielCreateView, CompradorFielUpdateView, CompradorFielDeleteView,
     VentaList, VentaCreate, reportes_ventas, reset_ventas,
+    VentaUpdateView, VentaDeleteView,
     usuario_list, UsuarioCreateView, UsuarioUpdateView, UsuarioDeleteView,
     activate_account,
     go_to_register, register, desactivar_producto,
@@ -62,6 +61,9 @@ urlpatterns = [
     path('ventas/nueva/', VentaCreate.as_view(), name='venta_create'),
     path("jefe/reportes/", reportes_ventas, name="reportes_ventas"),
     path("jefe/reset_ventas/",  reset_ventas,    name="reset_ventas"),
+    path('ventas/<int:pk>/editar/', VentaUpdateView.as_view(), name='venta_update'),
+    path('ventas/<int:pk>/eliminar/', VentaDeleteView.as_view(), name='venta_delete'),
+
 
     # Registro de usuarios
     path("register/", register, name="register"),

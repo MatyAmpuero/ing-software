@@ -38,9 +38,9 @@ class Producto(models.Model):
         return self.nombre
 
 class Venta(models.Model):
-    total     = models.PositiveIntegerField(default=0)
-    usuario   = models.ForeignKey('auth.User', on_delete=models.CASCADE)
-    fecha     = models.DateTimeField(default=timezone.now)
+    total = models.BigIntegerField(default=0)
+    usuario = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    fecha = models.DateTimeField(default=timezone.now)
     medio_pago = models.CharField(max_length=20, choices=[
         ("Crédito", "Tarjeta Crédito"),
         ("Débito", "Tarjeta Débito"),
